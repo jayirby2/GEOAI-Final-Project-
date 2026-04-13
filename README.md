@@ -80,7 +80,7 @@ This reflects the fundamental importance of **distance over spray angle** in det
 ### Hit Probability Heatmap
 A spatial heatmap showing the probability of a hit across the field:
 
-![Heatmap](output/heatmap.png)
+![Heatmap](output/plot_heatmap.png)
 
 ---
 
@@ -90,7 +90,7 @@ A spatial heatmap showing the probability of a hit across the field:
 ---
 
 ### Feature Importance
-![RF Importance](output/rf_importance.png)
+![RF Importance](output/RF_Feature_Imp.png)
 
 ---
 
