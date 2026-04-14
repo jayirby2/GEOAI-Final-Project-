@@ -1,19 +1,3 @@
-## Source the DataFrame from data processing file ##
-source("DataProcessing.R")
-
-## Import modeling packages ##
-
-## For spatial CV ##
-library(mlr3)
-library(mlr3learners)
-library(mlr3spatiotempcv)
-library(data.table)
-library(blockCV)
-library(mlr3extralearners)
-library(mlr3pipelines)
-library(mlr3tuning)
-library(paradox)
-
 ## Assign a spatial task ##
 task <- TaskClassifST$new(
   id = "bip",
@@ -24,26 +8,27 @@ task <- TaskClassifST$new(
 )
 task$set_col_roles(c("hc_x", "hc_y"), add_to = "feature")
 
-## Spatial CV ## 
-resampling_spatial <- rsmp("spcv_block", folds = 5, rows = 5, cols = 5)
-resampling_spatial$instantiate(task)
+## Spatial CV -- Need nested for models with hyperparameters## 
+resampling_outer <- rsmp("spcv_block", folds = 5, rows = 5, cols = 5)
+resampling_inner <- rsmp("spcv_block", folds = 5, rows = 5, cols = 5)
+
 
 #############################################
 ## Logistic Regression learner ##
 learner_glm <- lrn("classif.log_reg", predict_type = "prob")
 
 # Resample Result object (runs CV)
-rr_glm_spatial <- resample(task, learner_glm, resampling_spatial)
-rr_glm_spatial_auc <- rr_glm_spatial$aggregate(msr("classif.auc"))
-rr_glm_spatial_logloss <- rr_glm_spatial$aggregate(msr("classif.logloss"))
+rr_glm_spatial <- resample(task, learner_glm, resampling_outer)
+(rr_glm_spatial_auc <- rr_glm_spatial$aggregate(msr("classif.auc")))
+(rr_glm_spatial_logloss <- rr_glm_spatial$aggregate(msr("classif.logloss")))
 
 ## Compare to random CV ##
 resampling_rand <- rsmp("cv", folds = 5)
 resampling_rand$instantiate(task)
 # Resample Result object (runs CV)
 rr_glm_rand <- resample(task, learner_glm, resampling_rand)
-rr_glm_rand_auc <- rr_glm_rand$aggregate(msr("classif.auc"))
-rr_glm_rand_logloss <- rr_glm_rand$aggregate(msr("classif.logloss"))
+(rr_glm_rand_auc <- rr_glm_rand$aggregate(msr("classif.auc")))
+(rr_glm_rand_logloss <- rr_glm_rand$aggregate(msr("classif.logloss")))
 
 ## Comparing spatial and random CV ##
 (comparing_CV_GLM <- data.frame(
@@ -67,16 +52,13 @@ learner_gam$param_set$values$formula <- outcome ~ s(hc_x, hc_y, bs = "tp") +
   if_fielding_alignment +
   of_fielding_alignment
 
-rr_gam <- resample(task, learner_gam, resampling_spatial)
+rr_gam <- resample(task, learner_gam, resampling_outer)
 
 ###############################################
 
 ## Random Forest ##
 learner_rf <- lrn("classif.ranger", predict_type = "prob", 
                   importance = "permutation")
-
-## Tuning CV - still spatial block CV ## 
-resampling_tuning <- rsmp("spcv_block", folds = 5, rows = 5, cols = 5)
 
 search_space_rf <- ps(
   mtry = p_int(1, length(task$feature_names)),
@@ -85,21 +67,18 @@ search_space_rf <- ps(
 at_rf <- auto_tuner(
   tuner = tnr("random_search"),
   learner = learner_rf,
-  resampling = resampling_tuning,
+  resampling = resampling_inner,
   measure = msr("classif.auc"),
   search_space = search_space_rf,
   terminator = trm("evals", n_evals = 10),
   store_models = FALSE
 )
-## Extract best params, feed them to our model ##
-at_rf$train(task)
-best_rf <- at_rf$tuning_result
-best_params_rf <- list(
-  mtry = best_rf$mtry,
-  min.node.size = best_rf$min.node.size
-)
-learner_rf$param_set$values <- best_params_rf
-rr_rf <- resample(task, learner_rf, resampling_spatial, store_models = TRUE)
+
+rr_rf <- resample(task, at_rf, resampling_outer, store_models = TRUE)
+
+# Metrics
+rr_rf$aggregate(msr("classif.auc"))
+rr_rf$aggregate(msr("classif.logloss"))
 
 ###########################################################
 
@@ -134,28 +113,18 @@ search_space_xgb <- ps(
 at_xgb <- auto_tuner(
   tuner = tnr("random_search"),
   learner = learner_xgb,
-  resampling = resampling_tuning,
+  resampling = resampling_inner,
   measure = msr("classif.auc"),
   search_space = search_space_xgb,
   terminator = trm("evals", n_evals = 10),
   store_models = FALSE
 )
 
-at_xgb$train(task)
+rr_xgb <- resample(task, at_xgb, resampling_outer)
 
-best_xgb <- at_xgb$tuning_result
-best_params_xgb <- list(
-  eta = best_xgb$eta,
-  max_depth = best_xgb$max_depth,
-  subsample = best_xgb$subsample,
-  colsample_bytree = best_xgb$colsample_bytree,
-  nrounds = best_xgb$nrounds
-)
+rr_xgb$aggregate(msr("classif.auc"))
+rr_xgb$aggregate(msr("classif.logloss"))
 
-learner_xgb$param_set$values <- best_params_xgb
-
-
-rr_xgb <- resample(task, learner_xgb, resampling_spatial)
 
 ###########################################################
 
@@ -178,23 +147,14 @@ search_space_svm <- ps(
 at_svm <- auto_tuner(
   tuner = tnr("random_search"),
   learner = learner_svm,
-  resampling = resampling_tuning,
+  resampling = resampling_inner,
   measure = msr("classif.auc"),
   search_space = search_space_svm,
   terminator = trm("evals", n_evals = 10),
   store_models = FALSE
 )
+rr_svm <- resample(task, at_svm, resampling_outer)
+rr_svm$aggregate(msr("classif.auc"))
+rr_svm$aggregate(msr("classif.logloss"))
 
-## Train tuner ##
-at_svm$train(task)
-
-## Extract best params ##
-best_svm <- at_svm$tuning_result
-best_params_svm <- at_svm$tuning_result$learner_param_vals[[1]]
-
-## Assign params to learner ##
-learner_svm$param_set$values <- best_params_svm
-
-## Final spatial resampling ##
-rr_svm <- resample(task, learner_svm, resampling_spatial)
 

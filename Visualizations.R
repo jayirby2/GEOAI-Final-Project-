@@ -1,7 +1,3 @@
-library(gt)
-library(ggplot2)
-library(shapviz)
-
 ## Visualizations ##
 
 ## Evalutation Metrics ## 
@@ -39,6 +35,7 @@ pt <- results_df %>%
     table.font.size = px(13),
     data_row.padding = px(6)
   )
+
 ## Saving the plot
 ## gtsave(pt, "model_performance.png")
 
@@ -117,6 +114,7 @@ p_hit_hm <- ggplot() +
     legend.text = element_text(color = "white"),
     legend.title = element_text(color = "white")
   )
+
 ## Saving the plot
 ## ggsave("plot_heatmap.png", plot=p_hit_hm)
 
@@ -134,6 +132,18 @@ sv <- shapviz(
 )
 
 sv_importance(sv)
+
+sv_importance(sv, kind = "beeswarm")
+
+p_shap <- sv_importance(sv, kind = "beeswarm") +
+  ggplot2::labs(
+    title = "How Features Influence Hit Probability",
+    subtitle = "SHAP values showing individual feature contributions across all batted balls",
+    x = "Impact on Model Output (SHAP value)",
+    y = "Feature",
+    color = "Feature Value"
+  )
+ggsave("shap_plot.png", p_shap, width = 10, height = 6, dpi = 300)
 
 ## Enhancing the RF Feature Importance viz ##
 
@@ -172,6 +182,7 @@ pt_imp <- imp_df %>%
   ) %>%
   opt_row_striping()
 
+pt_imp
 ## Saving the plot
 ## gtsave(pt_imp, "RF_Feature_Imp.png")
 
@@ -190,7 +201,7 @@ rf_calib_viz <- rf_calib %>%
     title = md("**Model Calibration -- Random Forest**")
   )
   
-## gtsave(rf_calib_viz, "RF_Calib.png")
+# gtsave(rf_calib_viz, "RF_Calib.png")
 
 gam_calib_viz <- gam_calib %>%
   gt() %>% 

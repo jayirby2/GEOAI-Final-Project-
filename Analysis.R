@@ -58,7 +58,8 @@ svm_calib <- assess_calibration(rr_svm)
 
 ## Feature Analysis ##
 ## Importance evaluated with 'permutation' across all CV folds ##
-imp_list <- lapply(rr_rf$learners, function(l) l$model$variable.importance)
+imp_list <- lapply(rr_rf$learners, function(l) {
+  l$model$learner$model$variable.importance
+})
 imp_avg <- Reduce("+", imp_list) / length(imp_list)
-
 
